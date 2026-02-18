@@ -1,21 +1,43 @@
 exports.handler = async function(event) {
+  // Handle CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+      },
+      body: ''
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
   if (!GEMINI_API_KEY) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'GEMINI_API_KEY not set' }) };
+    return {
+      statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: 'GEMINI_API_KEY not set' })
+    };
   }
 
-  let body;
+  let system, prompt, maxTokens;
   try {
-    body = JSON.parse(event.body);
-  } catch {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
+    const body = JSON.parse(event.body || '{}');
+    system = body.system || '';
+    prompt = body.prompt || '';
+    maxTokens = body.maxTokens || 1000;
+  } catch (e) {
+    return {
+      statusCode: 400,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: 'Invalid JSON body', raw: event.body })
+    };
   }
-
-  const { system, prompt, maxTokens = 1000 } = body;
 
   try {
     const res = await fetch(
@@ -33,7 +55,11 @@ exports.handler = async function(event) {
 
     if (!res.ok) {
       const err = await res.text();
-      return { statusCode: res.status, body: JSON.stringify({ error: err }) };
+      return {
+        statusCode: res.status,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: err })
+      };
     }
 
     const data = await res.json();
@@ -41,10 +67,17 @@ exports.handler = async function(event) {
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
       body: JSON.stringify({ text })
     };
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return {
+      statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: err.message })
+    };
   }
 };
